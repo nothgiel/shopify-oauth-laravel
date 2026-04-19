@@ -13,7 +13,7 @@ Route::group([
     Route::get('load', [Config::get('shopify-oauth-laravel.controllers.load'), 'load'])
         ->name('shopify-load');
 
-    Route::get('uninstall', [Config::get('shopify-oauth-laravel.controllers.uninstall'), 'uninstall'])
+    Route::post('uninstall', [Config::get('shopify-oauth-laravel.controllers.uninstall'), 'uninstall'])
         ->name('shopify-uninstall');
 
 });
