@@ -18,10 +18,35 @@ class ShopifyLoadController extends Controller
 {
     public function load(): RedirectResponse
     {
-        if (request('code') && request('shop') && request('hmac')) {	
+        /* Recover the client refer code from the install cookie when
+           the chat-side PHP session got dropped during Shopify's
+           OAuth redirect chain (Safari ITP, cross-browser opens).
+           Cookie is set on .dropstart.app at /shopify/pre-install,
+           so this works for both the chat and dropstart funnels.
+           When recovered, we stash into Session::put('refer') so the
+           rest of this controller's redirect cascade and the
+           downstream user.refer_id update both pick it up. */
+        if (!Session::has('refer')) {
+            $cookieValue = request()->cookie('shopify_install_context');
+            if ($cookieValue) {
+                try {
+                    $context = decrypt($cookieValue);
+                    if (!empty($context['refer_id'])) {
+                        Session::put('refer', $context['refer_id']);
+                        \Log::info('shopify-load: recovered refer from cookie', [
+                            'refer' => $context['refer_id'],
+                        ]);
+                    }
+                } catch (\Throwable $e) {
+                    \Log::warning('shopify-load: cookie decrypt failed', ['err' => $e->getMessage()]);
+                }
+            }
+        }
+
+        if (request('code') && request('shop') && request('hmac')) {
 			$home = Config::get('shopify-oauth-laravel.app_home_url');
 			$app_home_url = $home;
-		
+
             if(!$this->validateResponse(request('hmac'), request()->getQueryString())){
 
                 \Log::error('HMAC error', ['home-Url' => $app_home_url]);
@@ -46,6 +71,21 @@ class ShopifyLoadController extends Controller
 
                 if(!$user = $this->getUserModelClass()::query()->where('store_url', request('shop'))->first())
                     $user = $this->createUser($store);
+
+                /* Stamp refer onto a freshly-created user when session
+                   recovery (or original session) gave us a refer code.
+                   Without this, priority-3 in the redirect cascade has
+                   nothing to resolve against for first-install users
+                   whose chat-side session was wiped — they'd land on
+                   the no-refer default funnel even though the cookie
+                   carried their attribution. */
+                if (isset($user->id) && Session::has('refer') && empty($user->refer_id)) {
+                    $user->update(['refer_id' => Session::get('refer')]);
+                    \Log::info('Load controller: stamped refer onto new user', [
+                        'user_id' => $user->id,
+                        'refer'   => Session::get('refer'),
+                    ]);
+                }
 
                 if (isset($user->id) && isset($store->id)) {
                     if ($this->assignUserToStore($user->id, $store->id)) {
@@ -97,10 +137,11 @@ class ShopifyLoadController extends Controller
                         // sync with App\Http\Middleware\RedirectGoFunnelDomains.
                         if ($domain) {
                             $goDomains = ['go.ecomwebsites.com', 'launch.ecomwebsites.com', 'start.ecomwebsites.com'];
-                            if (in_array($domain, $goDomains, true))
+                            if (in_array($domain, $goDomains, true)) {
                                 $app_home_url = "https://{$domain}/go";
-                            else
+                            } else {
                                 $app_home_url = "https://{$domain}{$home}";
+                            }
                         }
 
                         // Update user.refer_id to keep it current for future direct-from-Shopify loads
