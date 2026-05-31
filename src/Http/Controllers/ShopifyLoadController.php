@@ -123,11 +123,21 @@ class ShopifyLoadController extends Controller
                         }
 
                         // Priority 3: user->refer_id — last resort for direct-from-Shopify-admin loads
+                        // when both the request host (Priority 1) and the install cookie
+                        // (Priority 2) failed to produce a domain. Always restore session
+                        // refer so the downstream /setup render resolves the client correctly
+                        // for non-custom-domain clients (Tradelle etc.) too — previously this
+                        // block silently no-op'd for them and dropped them into client_id=3.
                         if (!$domain && $user->refer_id) {
                             $resolvedClient = Client::where('refer', $user->refer_id)->first();
-                            if ($resolvedClient && $resolvedClient->custom_domain) {
-                                $domain = $resolvedClient->primary_domain;
-                                \Log::info('Load controller: resolved domain from user refer_id', ['domain' => $domain, 'refer_id' => $user->refer_id]);
+                            if ($resolvedClient) {
+                                Session::put('refer', $user->refer_id);
+                                if ($resolvedClient->custom_domain) {
+                                    $domain = $resolvedClient->primary_domain;
+                                    \Log::info('Load controller: resolved domain from user refer_id', ['domain' => $domain, 'refer_id' => $user->refer_id]);
+                                } else {
+                                    \Log::info('Load controller: restored session refer from user.refer_id (no custom domain)', ['refer_id' => $user->refer_id]);
+                                }
                             }
                         }
 
