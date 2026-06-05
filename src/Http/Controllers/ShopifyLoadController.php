@@ -143,10 +143,18 @@ class ShopifyLoadController extends Controller
 
                         // Build the redirect URL from the resolved domain.
                         // Brands whose canonical funnel is /go skip the
-                        // standard $home (/setup) path. Keep this list in
-                        // sync with App\Http\Middleware\RedirectGoFunnelDomains.
+                        // standard $home (/setup) path.
+                        //
+                        // Self-contained list ON PURPOSE: this fork is shared by
+                        // multiple installs (dropstart, ai, portal, dev) via the
+                        // dev-main requirement, so it must NOT reference a
+                        // consuming app's classes (e.g.
+                        // App\Http\Middleware\RedirectGoFunnelDomains) — that
+                        // class doesn't exist in every app and would fatal their
+                        // OAuth callback. Keep this list in sync with that
+                        // middleware's GO_DEFAULT_DOMAINS by hand.
                         if ($domain) {
-                            $goDomains = ['go.ecomwebsites.com', 'launch.ecomwebsites.com', 'start.ecomwebsites.com'];
+                            $goDomains = ['go.ecomwebsites.com', 'start.ecomwebsites.com'];
                             if (in_array($domain, $goDomains, true)) {
                                 $app_home_url = "https://{$domain}/go";
                             } else {
