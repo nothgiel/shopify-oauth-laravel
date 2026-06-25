@@ -31,10 +31,16 @@ class ShopifyInstallController extends Controller
 
                 if ($client and $client->custom_domain)
                     $domain = $client->primary_domain;
-                else
+                elseif ($client and (int) $client->id !== 3)
+                    // A real referral partner with no custom domain — unchanged.
                     $domain = "dropstart.app";
+                else
+                    // Organic / unresolved referral / DropStart's own client 3
+                    // → route to the AI funnel at chat.dropstart.app.
+                    $domain = "chat.dropstart.app";
             } else
-                $domain = "dropstart.app";
+                // Pure organic install (no prior visit) → chat.dropstart.app.
+                $domain = "chat.dropstart.app";
         }		
 		
         if(request('host') && request('shop'))

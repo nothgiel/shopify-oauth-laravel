@@ -155,7 +155,20 @@ class ShopifyLoadController extends Controller
                         // middleware's GO_DEFAULT_DOMAINS by hand.
                         if ($domain) {
                             $goDomains = ['go.ecomwebsites.com', 'start.ecomwebsites.com'];
-                            if (in_array($domain, $goDomains, true)) {
+                            if (request()->cookie('ds_unlock')) {
+                                // /unlock funnel (client-44 store-ready landing):
+                                // /unlock is just the branded landing + create-
+                                // store/OAuth entry. After OAuth, hand the merchant
+                                // off to client-44's /setup flow (plan + niche +
+                                // build) instead of continuing in /unlock. Force
+                                // the client-44 refer so /setup resolves client 44
+                                // regardless of which domain resolved above (it
+                                // reads Session('refer')). Cookie-gated — set only
+                                // by /unlock-connect, so NO other flow is affected.
+                                // TG10564.
+                                Session::put('refer', '8e9Q9z0D'); // client 44 (Ecom Websites)
+                                $app_home_url = "https://{$domain}{$home}";
+                            } elseif (in_array($domain, $goDomains, true)) {
                                 $app_home_url = "https://{$domain}/go";
                             } else {
                                 $app_home_url = "https://{$domain}{$home}";
